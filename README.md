@@ -69,6 +69,19 @@ python scrutineer.py
 streamlit run app.py
 ```
 
+### Universal Agent Skill Compatibility (Claude Code · Codex · Antigravity)
+
+The `fraud-relay-auditor` skill adheres to the Agent Skills standard and is natively discoverable across major agent environments without duplicating files:
+
+- **Google Antigravity:** Discovered via `.agents/skills/fraud-relay-auditor/SKILL.md`. Trigger naturally in chat:  
+  *“Audit the credit card fraud relay pipelines and launch the pit wall.”*
+- **Claude Code:** Discovered via the `.claude/skills/fraud-relay-auditor` symlink. Trigger using:  
+  `/fraud-relay-auditor` or *“Use the fraud-relay-auditor skill to benchmark the 3 lanes.”*
+- **OpenAI Codex CLI:** Discovered automatically from repository skill roots (`.agents/skills/`). Trigger using:  
+  *“Run the fraud-relay-auditor skill and verify zero test-data leakage.”*
+
+All runtimes share the exact same authoritative `SKILL.md` runbook and `scripts/` via a relative symlink.
+
 ---
 
 ## 5. Benchmark Results
@@ -126,10 +139,12 @@ If given more time and computational resources, we would expand RelayGuard along
 ```
 fraud-relay-arena/
 ├── .agents/skills/fraud-relay-auditor/
-│   ├── SKILL.md                     # Agent skill specification
+│   ├── SKILL.md                     # Authoritative Agent skill specification
 │   └── scripts/
 │       ├── baton_contract.py        # Authoritative RelayBaton contract & splitter
 │       └── scrutineer.py            # 3-Lane sprint orchestrator & AST auditor
+├── .claude/skills/
+│   └── fraud-relay-auditor          # Relative symlink -> ../../.agents/skills/fraud-relay-auditor
 ├── data/
 │   ├── .gitkeep                     # Preserves data directory structure
 │   └── creditcard.csv               # Kaggle dataset (gitignored)
