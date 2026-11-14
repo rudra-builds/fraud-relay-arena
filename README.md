@@ -88,7 +88,7 @@ Track Security Audit: ✅ scrutineer (16 functions verified) | ✅ baton_contrac
 ```
 - **Cost Winner:** **Lane 3** cuts total banking losses to **\$7,920.00** (a **38.1% cost reduction** compared to Baseline's \$12,790.00).
 - **Precision Winner:** **Lane 2** reaches **98.2% precision** (only 1 false alarm out of 56,887 legitimate test transactions).
-- **Sub-Microsecond Speed:** All four pipelines achieve inference latency between **0.019 µs and 0.470 µs per transaction**, clearing real-time payment gateway SLAs.
+- **Sub-Microsecond Speed:** All four pipelines achieve inference latency between **0.020 µs and 0.521 µs per transaction**, clearing real-time payment gateway SLAs.
 
 ---
 
@@ -97,7 +97,7 @@ Track Security Audit: ✅ scrutineer (16 functions verified) | ✅ baton_contrac
 In accordance with Section 3 of the Veritas AI project guidelines, we highlight real mistakes our models make on the unseen Kaggle test set:
 
 ### Example 1: Missed Fraud / False Negative (Test Row 1882)
-- **Ground Truth:** Fraud (`Class = 1`) | **Lane 1 Score:** `29.22%` | **Lane 3 Score:** `9.26%` (Threshold = `0.50`)
+- **Ground Truth:** Fraud (`Class = 1`) | **Lane 1 Score:** `29.22%` | **Lane 3 Score:** `9.26%` (Threshold = `0.35`)
 - **Transaction Amount:** **\$2.22** (A micro-charge!)
 - **Feature Readings:** $V_{14} = -4.943$ (fraud-like), $V_{17} = +3.702$ (inverted/positive), $V_{12} = -0.741$ (near-zero), $V_{10} = -0.628$.
 - **Why the Model Failed:** This transaction represents a real-world card-testing micro-charge of just **\$2.22**. The fraudster charged a nominal fee to verify the stolen card's validity. While $V_{14}$ exhibited a classic negative fraud deviation ($-4.943$), $V_{17}$ was anomalous in the positive direction ($+3.702$), and $V_{12}$ remained near zero. The tree-based ensembles routed this conjunction down majority-legitimate branches because of the tiny amount and mixed principal components. Under our cost matrix, this escaped fraud cost the bank **\$500.00**.
@@ -148,7 +148,7 @@ fraud-relay-arena/
 ## 9. AI Tools Citation & References
 
 ### AI Tools Used
-- **Google Antigravity IDE (Gemini 3.8 Flash):** Used as an AI pair programmer for multi-agent architecture design, AST leakage-visitor implementation, Streamlit pit-wall dashboard layout, and documentation structuring in accordance with Section 2 (Rule 4) of the Veritas AI Hackathon guidelines.
+- **Google Antigravity IDE:** Used as an AI pair programmer for multi-agent architecture design, AST leakage-visitor implementation, Streamlit pit-wall dashboard layout, and documentation structuring in accordance with Section 2 (Rule 4) of the Veritas AI Hackathon guidelines.
 
 ### Direct Library & Dataset Links
 - **Dataset:** [Kaggle Credit Card Fraud Detection (ULB Machine Learning Group)](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
