@@ -1,0 +1,22 @@
+{
+  "day1": {
+    "transactions": 144786,
+    "frauds": 281,
+    "fraud_rate_pct": 0.194
+  },
+  "day2": {
+    "transactions": 140021,
+    "frauds": 211,
+    "fraud_rate_pct": 0.151
+  },
+  "logistic_regression": {
+    "pr_auc": 0.7757,
+    "precision": 0.0379,
+    "recall": 0.891
+  },
+  "hist_gradient_boosting": {
+    "pr_auc": 0.4924,
+    "precision": 0.2615,
+    "recall": 0.7251
+  }
+}

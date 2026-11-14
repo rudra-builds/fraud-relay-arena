@@ -1,7 +1,6 @@
 # 🏁 Fraud Relay Arena
 
-**Team:** Rudra Sharma  
-**Track:** Veritas AI International High School Hackathon 2026 – Track 4.2.2: Credit Card Fraud Detection  
+**Track:** Veritas AI International High School Hackathon 2026 – Track 4.2.2: Credit Card Fraud Detection (Round 1 Blind Evaluation)  
 
 > ⚠️ **Disclaimer:** This project is a prototype and is not financial advice.
 

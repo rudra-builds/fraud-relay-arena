@@ -1,82 +1,75 @@
-# Veritas AI Hackathon 2026 — Track 4.2.2 Submission Report
+# Veritas AI Hackathon 2026 — Track 4.2.2 Project Report
 
-**Project Title:** RelayGuard: Cost-Calibrated Decision Pipelines for Credit Card Fraud Triage  
-**Participant:** Rudra Sharma  
-**Track:** 4.2.2 – Credit Card Fraud Detection  
-**Repository:** [github.com/rudra-builds/fraud-relay-arena](https://github.com/rudra-builds/fraud-relay-arena)  
-
----
-
-## 1. Problem Definition & The Accuracy Trap
-
-In credit card payment systems, fraud is rare (0.17% of transactions in our dataset) but financially damaging. Relying on raw accuracy creates a severe trap: a naive model that predicts every single transaction is legitimate achieves **99.87% accuracy**, yet it catches **0% of fraud** and results in **$37,500.00 in unstopped fraud losses**.
-
-### End-User Persona & The Exact Triage Moment
-Our target user is a **Tier-1 Payment-Gateway Fraud Analyst**. At the moment an authorization request hits the payment switch, our pipeline assigns transactions to one of three automated tiers:
-1. **Tier 1 (Auto-Approve, Risk < 15%):** Frictionless approval for benign transactions.
-2. **Tier 2 (Analyst Desk Triage, 15% ≤ Risk < 65%):** Routed to the analyst queue with automated, plain-English reason codes (e.g., *"Anomalous V17 inversion on a $2.22 micro-charge suggests card-testing fraud"*).
-3. **Tier 3 (Auto-Block, Risk ≥ 65%):** Immediate termination of high-confidence syndicate attacks.
-
-Decisions are governed by an **asymmetric cost matrix**:
-- **Cost of a Missed Fraud (False Negative):** **$500.00** (average chargeback liability + processing fines).
-- **Cost of a False Alarm (False Positive):** **$10.00** (customer friction, SMS verification, and support overhead).
+**Project Title:** RelayGuard: Cost-Calibrated Triage Pipelines for Credit Card Fraud  
+**Track:** 4.2.2 – Credit Card Fraud Detection (Round 1 Blind Review)  
+**Code Repository:** [github.com/rudra-builds/fraud-relay-arena](https://github.com/rudra-builds/fraud-relay-arena)  
 
 ---
 
-## 2. Empirical Methodology & Zero-Leakage Architecture
+## 1. Project Selection & "What We Added"
 
-- **Dataset:** Evaluated on the full 284,807 transactions of the Kaggle ULB Credit Card Fraud dataset (492 frauds).
-- **Chronological Split:** Transactions are ordered strictly by the `Time` feature and split **80% train (227,845 rows, 417 frauds)** and **20% test (56,962 rows, 75 frauds)**. Shuffling is strictly prohibited to prevent lookahead data leakage.
-- **Architectural Guardrails:** Feature transformations hand off states via a cryptographically hashed contract (`RelayBaton`). Code is audited via automated Python `ast` syntax-tree inspection to prove zero `.fit()` calls on test data, alongside Bandit SAST scans (0 security flaws).
-- **Synthetic Fallback Disclosure:** For offline clones without immediate Kaggle credentials, a 25,000-row synthetic fallback generator is provided. All benchmark numbers below were computed on the real Kaggle dataset.
+### Suggested Project Chosen
+We selected the **Credit Card Fraud Detection** track (Track 4.2.2), based on the Kaggle ULB dataset of 284,807 transactions.
+
+### What We Added (Beyond the Standard Prompt)
+1. **Asymmetric Cost Matrix & Fair Threshold Tuning:** Instead of assuming symmetric error costs, we modeled real banking economics ($500 per missed fraud vs. $10 per false-alarm card freeze). We tuned decision thresholds ($T$) for both baseline and tree models on a validation slice rather than using an arbitrary 0.50 cutoff.
+2. **Dual Baseline Benchmarking:** We benchmarked models against both a **Naive "Always Legitimate" Baseline** (exposing the 99.87% accuracy trap) and the official **Balanced Logistic Regression Baseline**.
+3. **3-Tier Analyst Triage Funnel:** Created a human-in-the-loop workflow: Tier 1 Auto-Pass (<15%), Tier 2 Analyst Review Queue with Reason Codes (15%–65%), and Tier 3 Auto-Block (≥65%).
+4. **2-Day Temporal Concept Drift Analysis (Own Question):** Created a reproducible experiment (`scripts/reproduce_drift.py`) comparing Day 1 training vs. Day 2 evaluation to study feature drift across the 48-hour recording window.
+5. **Architectural Guardrails:** Enforced strict chronological splitting (no shuffling) verified by cryptographic SHA-256 state handoffs and automated Python AST syntax audits to guarantee zero test-set leakage.
 
 ---
 
-## 3. Benchmark Results & Baseline Comparisons
+## 2. Methodology & Leakage Prevention
 
-Evaluated on the unseen 56,962-transaction test set:
+- **Dataset:** 284,807 transactions (492 frauds, 0.17% prevalence).
+- **Split:** Strictly chronological based on `Time`: **80% train (227,845 txs, 417 frauds)** and **20% test (56,962 txs, 75 frauds)**.
+- **Reproducibility & Fallback:** A realistic synthetic generator is included so the repository never crashes on cold clones. Primary benchmark telemetry was 100% evaluated on the Kaggle dataset.
 
-| Pipeline | PR-AUC | Precision | Recall | Bank Cost ($) | Latency (µs/tx) | Key Takeaway |
+---
+
+## 3. Results & Honest Statistical Analysis
+
+Evaluated on the 56,962 unseen test transactions (75 frauds):
+
+| Pipeline / Model | Threshold ($T$) | PR-AUC | Precision | Recall | Bank Cost ($) | Inference (µs/tx) |
 |---|---|---|---|---|---|---|
-| **Naive Baseline (Always Legitimate)** | 0.0013 | 0.0000 | 0.0000 | $37,500.00 | 0.000 | 99.87% accuracy trap; misses all 75 frauds. |
-| **Baseline Code 0 (Balanced LogisticReg)** | 0.7841 | 0.0708 | **0.8933** | $12,790.00 | 0.014 | Catches fraud but floods desk with 879 false alarms. |
-| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | $9,570.00 | 0.388 | Slashes false alarms from 879 to 7; saves $3,220. |
-| **Lane 2: Anomaly + Forest Hybrid** | **0.8079** | **0.9818** | 0.7200 | $10,510.00 | 0.442 | **Precision Winner:** Only 1 false alarm out of 56,887 swipes. |
-| **Lane 3: Pruned Cost-Tuner ($T=0.35$)** | 0.7921 | 0.5882 | 0.8000 | **$7,920.00** | 0.328 | **Bank Cost Winner:** Cuts losses by **38.1% vs Code 0** and **78.9% vs Naive**. |
+| **Naive Baseline (Always Legitimate)** | 0.50 | 0.0013 | 0.0000 | 0.0000 | $37,500.00 | 0.000 |
+| **Code 0: Logistic Regression (Default)** | 0.50 | 0.7841 | 0.0708 | **0.8933** | $12,790.00 | **0.014** |
+| **Code 0: Logistic Regression (Cost-Tuned)** | 0.90 | 0.7841 | 0.2667 | 0.8533 | **$7,260.00** | **0.014** |
+| **Lane 1: Velocity & HistGBDT** | 0.50 | 0.7964 | 0.8889 | 0.7467 | $9,570.00 | 0.388 |
+| **Lane 2: Anomaly + Forest Hybrid** | 0.50 | **0.8079** | **0.9818** | 0.7200 | $10,510.00 | 0.442 |
+| **Lane 3: Pruned HistGBDT (Cost-Tuned)** | **0.35** | 0.7921 | 0.5882 | 0.8000 | **$7,920.00** | 0.328 |
 
-*Score Formula:* $(45\% \times \text{PR-AUC}) + (35\% \times \text{Cost Reduction vs Baseline}) + (20\% \times \text{Latency SLA} \le 5\mu\text{s})$. All pipelines clear the payment gateway SLA (< 0.55 µs/swipe).
-
----
-
-## 4. "Own Question" Exploration: 2-Day Temporal Concept Drift
-
-The dataset spans 48 hours (172,800 seconds). We tested whether fraud patterns drift between **Day 1 ($0 \le \text{Time} < 86,400$)** and **Day 2 ($\text{Time} \ge 86,400$)**:
-- **Day 1:** 144,786 transactions, 281 frauds (0.194% fraud rate, mean amount $88.58).
-- **Day 2:** 140,021 transactions, 211 frauds (0.151% fraud rate, mean amount $84.33).
-
-**Empirical Finding:** When trained strictly on Day 1 and evaluated on Day 2:
-- Linear models maintained a steady **0.7757 PR-AUC** (hyperplanes remained robust across PCA components).
-- Unregularized gradient boosting trees dropped from **~0.80 to 0.4924 PR-AUC**, overfitting to Day 1's local PCA splits.
-- **System Insight:** Real-world payment gateways must utilize continuous daily updating or heavily regularized shallow trees to resist day-to-day concept drift.
+> **Honest Statistical Note:** With only 75 frauds in the test slice, differences between PR-AUC 0.79 and 0.81 fall within sampling noise. The primary operational gain is not algorithmic supremacy, but moving from default symmetric thresholds to cost-calibrated boundaries ($35%–90%), which cuts banking losses by over 38% while reducing false alarms.
 
 ---
 
-## 5. Honest Failure Analysis (Unseen Test Set Mistakes)
+## 4. "Own Question": 2-Day Temporal Concept Drift
 
-In accordance with Section 3 of the project guidelines, we analyzed real errors:
-1. **Missed Fraud / False Negative (Test Row #1882):** A real-world card-testing micro-charge of **$2.22**. While $V_{14}$ showed a negative fraud deviation ($-4.943$), $V_{17}$ was anomalous in the positive direction ($+3.702$), routing it down majority-legitimate tree branches. Cost: **$500.00**.
-2. **False Alarm / False Positive (Test Row #660):** A legitimate transaction of **$0.77** with extreme PCA variance ($V_{14} = -7.537$, $V_{12} = -2.037$) that overlapped with the multivariate fraud centroid. Cost: **$10.00** in customer friction.
+The dataset spans 48 hours (Day 1: 144,786 txs; Day 2: 140,021 txs). Reproducible via `python3 scripts/reproduce_drift.py`:
+- **Balanced Logistic Regression:** Maintained **0.7757 PR-AUC** (linear boundaries generalized stably across PCA distributions).
+- **HistGradientBoosting:** Dropped from **~0.80 to 0.4924 PR-AUC** when trained purely on Day 1.
+- **Takeaway:** Complex tree ensembles overfit to Day 1's local PCA split points. In production, payment gateways require daily online retraining or regularized linear fallbacks.
 
 ---
 
-## 6. Limitations, AI Credits & Mandatory Disclaimer
+## 5. Honest Failure Analysis & Hypotheses
 
-### Limitations
-- Models currently evaluate transactions as independent rows rather than constructing 1-hour sequential velocity graphs per cardholder.
-- Uniform cost matrix ($500/$10) models average loss rather than merchant-category-specific chargeback risk.
+Because features $V_1$–$V_{28}$ are anonymized PCA projections, all behavioral interpretations are **analyst hypotheses**:
+1. **Missed Fraud (Test Row #1882):** A **$2.22** micro-charge. While $V_{14}$ showed a negative deviation ($-4.943$), $V_{17}$ was anomalous in the positive direction ($+3.702$). We hypothesize this represents a card-testing micro-charge designed to evade negative-centroid detection.
+2. **False Alarm (Test Row #660):** A benign **$0.77** transaction with extreme PCA variance ($V_{14} = -7.537$) overlapping the fraud distribution.
+
+---
+
+## 6. AI Tools Used & Mandatory Disclaimer
 
 ### AI Tools Citation
-- **Google Antigravity IDE:** Utilized as an AI pair programming environment for AST leakage-visitor implementation, Streamlit pit-wall dashboard layout, and documentation structuring under Section 2 (Rule 4) of the Hackathon guidelines.
+In compliance with Rule 4:
+- **Google Antigravity IDE (Gemini 2.5 Flash / Pro):** Used for AST leakage-visitor implementation, Streamlit layout, and code modularization.
+- **Anthropic Claude Code & OpenAI Codex CLI:** Used to test cross-agent compatibility of the Agent Skill.
+- **Adobe Podcast AI:** Used for voice audio post-processing.
+*Every line of code and mathematical calculation was verified and can be fully explained by the author.*
 
 > [!IMPORTANT]
 > **Mandatory Disclaimer:** This project is a prototype and is not financial advice.
