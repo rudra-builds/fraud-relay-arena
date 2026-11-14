@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Datasets (creditcard.csv is ~150 MB and exceeds GitHub 100 MB hard limit)
+data/*.csv
+data/*.zip
+data/*.tar.gz
+!data/.gitkeep
+
+# IDEs & System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
+
+# Streamlit secrets / cache
+.streamlit/secrets.toml
+
+# Logs
+*.log
