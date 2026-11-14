@@ -4,6 +4,7 @@ app.py — Streamlit Pit-Wall Dashboard for RelayGuard
 Launch: streamlit run app.py
 """
 
+import importlib
 import json, math, sys
 from pathlib import Path
 import numpy as np, pandas as pd
