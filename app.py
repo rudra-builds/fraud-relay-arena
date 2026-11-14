@@ -32,7 +32,9 @@ train_disp = f"{train_rows:,}" if isinstance(train_rows, (int, float)) else str(
 test_disp = f"{test_rows:,}" if isinstance(test_rows, (int, float)) else str(test_rows)
 
 st.sidebar.title("🏁 RelayGuard")
-st.sidebar.markdown(f"**Track:** {meta.get('track','?')}  \n"
+st.sidebar.warning("⚠️ This project is a prototype and is not financial advice.")
+st.sidebar.markdown(f"**Team:** Rudra Sharma  \n"
+                     f"**Track:** {meta.get('track','?')}  \n"
                      f"**Train:** {train_disp}  \n"
                      f"**Test:** {test_disp}  \n"
                      f"**Fraud (train):** {fraud_tr}%  \n"
@@ -209,4 +211,5 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
 st.sidebar.divider()
-st.sidebar.caption("Veritas AI 2026 · Track 4.2.2 · RelayGuard")
+st.sidebar.caption("Team: Rudra Sharma · Veritas AI 2026 · Track 4.2.2")
+st.sidebar.caption("Prototype only · Not financial advice")

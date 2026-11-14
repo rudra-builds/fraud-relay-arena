@@ -2,7 +2,7 @@
   "metadata": {
     "hackathon": "Veritas AI International High School Hackathon 2026",
     "track": "4.2.2 \u2013 Credit Card Fraud Detection",
-    "timestamp": "2026-11-14T11:59:02+0530",
+    "timestamp": "2026-11-14T12:13:22+0530",
     "dataset_rows_train": 20000,
     "train_rows": 20000,
     "dataset_rows_test": 5000,
@@ -16,11 +16,11 @@
     "lane": "Baseline (Code 0)",
     "leg1_agent": "Standard RobustScaler",
     "leg2_agent": "LogisticRegression(class_weight='balanced')",
-    "leg1_ms": 4.24,
-    "leg2_ms": 16.97,
-    "inference_ms": 0.118,
-    "inference_ms_total": 0.118,
-    "us_per_tx": 0.024,
+    "leg1_ms": 5.31,
+    "leg2_ms": 21.22,
+    "inference_ms": 0.134,
+    "inference_ms_total": 0.134,
+    "us_per_tx": 0.027,
     "pr_auc": 1.0,
     "precision": 0.9677,
     "recall": 1.0,
@@ -543,18 +543,18 @@
         }
       ]
     },
-    "relay_score": 98.93
+    "relay_score": 98.67
   },
   "lanes": [
     {
       "lane": "Lane 1: Velocity & HistGBDT",
       "leg1_agent": "Agent 1A (Cyclical Time + LogAmount Engineer)",
       "leg2_agent": "Agent 1B (Weighted HistGradientBoosting)",
-      "leg1_ms": 13.23,
-      "leg2_ms": 1827.01,
-      "inference_ms": 6.28,
-      "inference_ms_total": 6.28,
-      "us_per_tx": 1.256,
+      "leg1_ms": 12.91,
+      "leg2_ms": 1811.84,
+      "inference_ms": 5.195,
+      "inference_ms_total": 5.195,
+      "us_per_tx": 1.039,
       "pr_auc": 0.9582,
       "precision": 0.963,
       "recall": 0.8667,
@@ -1099,17 +1099,17 @@
           }
         ]
       },
-      "relay_score": 3.49
+      "relay_score": 4.32
     },
     {
       "lane": "Lane 2: Anomaly + Forest Hybrid",
       "leg1_agent": "Agent 2A (IsolationForest Anomaly Feature Builder)",
       "leg2_agent": "Agent 2B (Balanced Subsample RandomForest)",
-      "leg1_ms": 114.94,
-      "leg2_ms": 223.16,
-      "inference_ms": 13.265,
-      "inference_ms_total": 13.265,
-      "us_per_tx": 2.653,
+      "leg1_ms": 116.84,
+      "leg2_ms": 234.99,
+      "inference_ms": 13.303,
+      "inference_ms_total": 13.303,
+      "us_per_tx": 2.661,
       "pr_auc": 0.9898,
       "precision": 1.0,
       "recall": 0.8,
@@ -1658,17 +1658,17 @@
         ],
         "false_positives": []
       },
-      "relay_score": 81.41
+      "relay_score": 80.72
     },
     {
       "lane": "Lane 3: Pruned Explainable Cost-Tuner",
       "leg1_agent": "Agent 3A (Top-12 Correlation Signal Pruner)",
       "leg2_agent": "Agent 3B (Cost-Minimizing HistGBDT @ T=0.10)",
-      "leg1_ms": 8.18,
-      "leg2_ms": 649.57,
-      "inference_ms": 3.321,
-      "inference_ms_total": 3.321,
-      "us_per_tx": 0.664,
+      "leg1_ms": 7.91,
+      "leg2_ms": 679.28,
+      "inference_ms": 3.429,
+      "inference_ms_total": 3.429,
+      "us_per_tx": 0.686,
       "pr_auc": 0.9757,
       "precision": 0.931,
       "recall": 0.9,
@@ -2297,7 +2297,7 @@
         "V12",
         "V14"
       ],
-      "relay_score": 64.52
+      "relay_score": 63.04
     }
   ],
   "security_audit": {

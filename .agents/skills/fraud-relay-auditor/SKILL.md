@@ -10,6 +10,8 @@ description: >
 
 # Fraud Relay Auditor Skill
 
+> ⚠️ **Disclaimer:** This project is a prototype and is not financial advice.
+
 ## Overview
 
 Orchestrates 6 specialised ML sub-agents across 3 parallel relay lanes to solve
