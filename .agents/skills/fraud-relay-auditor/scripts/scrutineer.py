@@ -14,6 +14,7 @@ Outputs relay_telemetry.json with PR-AUC, latency, confusion matrices,
 failure cases, and an AST + Bandit security audit for every agent script.
 """
 
+import argparse
 import ast
 import hashlib
 import json
@@ -21,7 +22,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import numpy as np
 from sklearn.ensemble import (
@@ -108,21 +109,33 @@ def agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feature_names) 
     """Leg 1 – Cyclical Time encoding + log-Amount feature engineering."""
 
     t0 = time.perf_counter_ns()
-    time_idx = feature_names.index("Time")
-    amt_idx = feature_names.index("Amount")
+    time_idx = feature_names.index("Time") if "Time" in feature_names else None
+    amt_idx = feature_names.index("Amount") if "Amount" in feature_names else None
+
+    aug_names = list(feature_names)
 
     def _augment(X: np.ndarray) -> np.ndarray:
-        hour_sin = np.sin(2 * np.pi * (X[:, time_idx] % 86400) / 86400).reshape(-1, 1)
-        hour_cos = np.cos(2 * np.pi * (X[:, time_idx] % 86400) / 86400).reshape(-1, 1)
-        log_amt = np.log1p(np.maximum(0, X[:, amt_idx])).reshape(-1, 1)
-        return np.hstack([X, hour_sin, hour_cos, log_amt]).astype(np.float32)
+        extra_cols = []
+        if time_idx is not None:
+            hour_sin = np.sin(2 * np.pi * (X[:, time_idx] % 86400) / 86400).reshape(-1, 1)
+            hour_cos = np.cos(2 * np.pi * (X[:, time_idx] % 86400) / 86400).reshape(-1, 1)
+            extra_cols.extend([hour_sin, hour_cos])
+        if amt_idx is not None:
+            log_amt = np.log1p(np.maximum(0, X[:, amt_idx])).reshape(-1, 1)
+            extra_cols.append(log_amt)
+        if extra_cols:
+            return np.hstack([X] + extra_cols).astype(np.float32)
+        return X.astype(np.float32)
+
+    if time_idx is not None:
+        aug_names.extend(["Hour_Sin", "Hour_Cos"])
+    if amt_idx is not None:
+        aug_names.append("Log_Amount")
 
     scaler = RobustScaler()
     X_tr = scaler.fit_transform(_augment(X_train))
     X_te = scaler.transform(_augment(X_test))
     leg1_ms = (time.perf_counter_ns() - t0) / 1e6
-
-    aug_names = feature_names + ["Hour_Sin", "Hour_Cos", "Log_Amount"]
 
     baton = RelayBaton(
         lane_id="Lane 1: Velocity & HistGBDT",
@@ -238,7 +251,8 @@ def agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feature_names) -> R
         else 0.0
         for i in range(X_train.shape[1])
     ])
-    top_idx = np.argsort(corrs)[-12:]
+    k = min(12, X_train.shape[1])
+    top_idx = np.argsort(corrs)[-k:]
     pruned_names = [feature_names[i] for i in top_idx]
 
     scaler = RobustScaler()
@@ -248,7 +262,7 @@ def agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feature_names) -> R
 
     baton = RelayBaton(
         lane_id="Lane 3: Pruned Explainable Cost-Tuner",
-        leg1_agent_name="Agent 3A (Top-12 Correlation Signal Pruner)",
+        leg1_agent_name=f"Agent 3A (Top-{k} Correlation Signal Pruner)",
         X_train=X_tr,
         y_train=y_train,
         X_test=X_te,
@@ -535,12 +549,32 @@ def _find_project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
-def main():
+def run_pipeline(
+    csv_path: str = "data/creditcard.csv",
+    target_col: str = "Class",
+    time_col: str = "Time",
+    fraud_cost: float = 500.0,
+    fp_cost: float = 10.0,
+    telemetry_path: Optional[Path] = None,
+) -> dict:
+    """Execute the complete 3-lane fraud relay benchmark and audit."""
+    global COST_MISSED_FRAUD, COST_FALSE_ALARM
+    COST_MISSED_FRAUD = float(fraud_cost)
+    COST_FALSE_ALARM = float(fp_cost)
+
     script_dir = Path(__file__).resolve().parent
     project_root = _find_project_root()
 
-    csv_path = project_root / "data" / "creditcard.csv"
-    telemetry_path = project_root / "relay_telemetry.json"
+    if telemetry_path is None:
+        telemetry_path = project_root / "relay_telemetry.json"
+    else:
+        telemetry_path = Path(telemetry_path)
+
+    # Resolve relative CSV path against project_root if needed
+    target_csv = Path(csv_path)
+    if not target_csv.is_absolute() and not target_csv.exists():
+        if (project_root / target_csv).exists():
+            target_csv = project_root / target_csv
 
     print("=" * 72)
     print("🏁 VERITAS AI FRAUD RELAY ARENA – Track 4.2.2")
@@ -548,7 +582,11 @@ def main():
 
     # ── Load & split ────────────────────────────────────────────────────
     X_train, y_train, X_test, y_test, feat_names, raw_test_df = (
-        load_chronological_split(str(csv_path))
+        load_chronological_split(
+            csv_path=str(target_csv),
+            target_col=target_col,
+            time_col=time_col,
+        )
     )
 
     # ── Code 0: Baseline ───────────────────────────────────────────────
@@ -612,6 +650,10 @@ def main():
             "fraud_pct_train": round(100 * y_train.mean(), 3),
             "fraud_rate_test_pct": round(100 * y_test.mean(), 3),
             "fraud_pct_test": round(100 * y_test.mean(), 3),
+            "target_col": target_col,
+            "time_col": time_col,
+            "fraud_cost": fraud_cost,
+            "fp_cost": fp_cost,
         },
         "baseline": baseline_res,
         "lanes": [r1, r2, r3],
@@ -646,6 +688,49 @@ def main():
         print(f"   🛡️  {name}: {audit['status']}  ({audit['modular_functions']} functions verified)")
 
     print("\n🏆 Done! Run `streamlit run app.py` from the project root to open the dashboard.\n")
+    return output
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Veritas AI 3-Lane Sprint Relay Fraud Auditor"
+    )
+    parser.add_argument(
+        "--data",
+        default="data/creditcard.csv",
+        help="Path to transaction CSV dataset (default: data/creditcard.csv)",
+    )
+    parser.add_argument(
+        "--target",
+        default="Class",
+        help="Target column name (default: Class)",
+    )
+    parser.add_argument(
+        "--time",
+        default="Time",
+        help="Time/timestamp column name (default: Time). If missing, maintains existing row order.",
+    )
+    parser.add_argument(
+        "--fraud-cost",
+        type=float,
+        default=500.0,
+        help="Cost per missed fraud / false negative (default: 500.0)",
+    )
+    parser.add_argument(
+        "--fp-cost",
+        type=float,
+        default=10.0,
+        help="Cost per false alarm / false positive (default: 10.0)",
+    )
+    args = parser.parse_args()
+
+    run_pipeline(
+        csv_path=args.data,
+        target_col=args.target,
+        time_col=args.time,
+        fraud_cost=args.fraud_cost,
+        fp_cost=args.fp_cost,
+    )
 
 
 if __name__ == "__main__":

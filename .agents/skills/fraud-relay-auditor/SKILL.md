@@ -53,11 +53,22 @@ kaggle datasets download -d mlg-ulb/creditcardfraud -p data/ --unzip
 
 ### Step 1 – Run the 3-Lane Sprint Relay + Baseline
 
+Execute the auditor pipeline using the authoritative script:
+
 ```bash
-# From project root:
-python scrutineer.py
-# Or directly via the skill script:
-python .agents/skills/fraud-relay-auditor/scripts/scrutineer.py
+python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py --data <csv_path> --target <target_col>
+```
+
+#### CLI Options
+- `--data <path>`: Path to transaction CSV (default: `data/creditcard.csv`). Automatically generates a 25,000-row synthetic fallback if missing.
+- `--target <col>`: Label column (default: `Class`).
+- `--time <col>`: Timestamp column for chronological ordering (default: `Time`). If not present, maintains existing row order for 80/20 split without crashing.
+- `--fraud-cost <float>`: Cost per missed fraud / false negative (default: `500.0`).
+- `--fp-cost <float>`: Cost per false alarm / false positive (default: `10.0`).
+
+#### Default Run
+```bash
+python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py
 ```
 
 This will:

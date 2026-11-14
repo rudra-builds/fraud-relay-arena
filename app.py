@@ -4,11 +4,18 @@ app.py — Streamlit Pit-Wall Dashboard for RelayGuard
 Launch: streamlit run app.py
 """
 
-import json, math
+import json, math, sys
 from pathlib import Path
 import numpy as np, pandas as pd
 import plotly.express as px
 import streamlit as st
+
+# Direct import from .agents/skills/fraud-relay-auditor/scripts/ (single source of truth)
+_scripts_dir = Path(__file__).resolve().parent / ".agents" / "skills" / "fraud-relay-auditor" / "scripts"
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+
+from scrutineer import run_pipeline
 
 st.set_page_config(page_title="🏁 RelayGuard", page_icon="🏁", layout="wide")
 
@@ -19,7 +26,13 @@ def load():
 
 data = load()
 if data is None:
-    st.error("**relay_telemetry.json not found.** Run `python scrutineer.py` first.")
+    st.title("🏁 RelayGuard — Trackside Pit Wall")
+    st.warning("**relay_telemetry.json not found.** Run `python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py` or click below.")
+    if st.button("🚀 Run Relay Benchmark with Default Dataset", type="primary"):
+        with st.spinner("Executing 3-Lane Sprint Relay..."):
+            run_pipeline()
+            st.cache_data.clear()
+            st.rerun()
     st.stop()
 
 meta = data.get("metadata", {})
@@ -39,6 +52,31 @@ st.sidebar.markdown(f"**Team:** Rudra Sharma  \n"
                      f"**Test:** {test_disp}  \n"
                      f"**Fraud (train):** {fraud_tr}%  \n"
                      f"**Fraud (test):** {fraud_te}%")
+
+# ── Custom Dataset Uploader ──────────────────────────────────────────
+st.sidebar.divider()
+st.sidebar.subheader("📤 Custom Dataset Benchmark")
+uploaded_file = st.sidebar.file_uploader("Upload Custom CSV", type=["csv"])
+custom_target = st.sidebar.text_input("Target Column", value=meta.get("target_col", "Class"))
+custom_time = st.sidebar.text_input("Time Column (optional)", value=meta.get("time_col", "Time"))
+
+if uploaded_file is not None:
+    if st.sidebar.button("🚀 Run Relay Benchmark", type="primary", width="stretch"):
+        with st.spinner("Executing 3-Lane Sprint Relay on uploaded dataset..."):
+            save_path = Path("data") / "uploaded_custom.csv"
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_bytes(uploaded_file.getvalue())
+            try:
+                run_pipeline(
+                    csv_path=str(save_path),
+                    target_col=custom_target.strip(),
+                    time_col=custom_time.strip(),
+                )
+                st.cache_data.clear()
+                st.sidebar.success("✅ Benchmark completed successfully!")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Benchmark error: {e}")
 
 st.title("🏁 RelayGuard — Trackside Pit Wall")
 all_r = [data["baseline"]] + data["lanes"]

@@ -51,36 +51,55 @@ Lane 3 directly addresses the rubric's "Make It Your Own" criterion by substitut
 
 ## 4. How to Run
 
-### Quick Start (Deterministic Synthetic Fallback)
-The pipeline includes a built-in synthetic generator matching the Kaggle schema (25,000 transactions, ~0.2% fraud) so it runs instantly without requiring the 150 MB CSV:
+### Quick Start (Standard Execution)
+The pipeline automatically generates a deterministic 25,000-row synthetic dataset if `data/creditcard.csv` is not present, so you can run it immediately after cloning:
 
 ```bash
+git clone https://github.com/rudra-builds/fraud-relay-arena.git
+cd fraud-relay-arena
 pip install -r requirements.txt
-python scrutineer.py
+
+# Run the 3-Lane Sprint Relay benchmark & AST audit
+python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py
+
+# Launch the interactive pit-wall dashboard
 streamlit run app.py
 ```
 
-### Full Kaggle Dataset Execution
-To execute on the complete 284,807-transaction dataset:
+### Full Kaggle Dataset Execution (284,807 Transactions)
 ```bash
 pip install kaggle
 kaggle datasets download -d mlg-ulb/creditcardfraud -p data/ --unzip
-python scrutineer.py
+python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py
 streamlit run app.py
 ```
 
-### Universal Agent Skill Compatibility (Claude Code · Codex · Antigravity)
+### Running with Custom Datasets & CLI Options
+`scrutineer.py` accepts custom transaction schemas and cost structures:
+
+```bash
+python3 .agents/skills/fraud-relay-auditor/scripts/scrutineer.py \
+  --data path/to/my_transactions.csv \
+  --target is_fraud \
+  --time timestamp \
+  --fraud-cost 750.0 \
+  --fp-cost 15.0
+```
+- If `--time` is omitted or not found in the CSV, the pipeline maintains the existing row order for the 80/20 chronological split without crashing.
+- Custom datasets can also be uploaded directly through the Streamlit sidebar UI (`Upload Custom CSV` + `Run Relay Benchmark`).
+
+### Universal Agent Skill Compatibility (OpenAI Codex · Claude Code · Antigravity)
 
 The `fraud-relay-auditor` skill adheres to the Agent Skills standard and is natively discoverable across major agent environments without duplicating files:
 
-- **Google Antigravity:** Discovered via `.agents/skills/fraud-relay-auditor/SKILL.md`. Trigger naturally in chat:  
+- **OpenAI Codex CLI:** Automatically reads repository skill roots (`.agents/skills/`). Trigger directly:  
+  `$fraud-relay-auditor` or prompt *“Run the fraud-relay-auditor skill on data/creditcard.csv”*.
+- **Claude Code:** Discovered via the `.claude/skills/fraud-relay-auditor` relative symlink. Trigger using:  
+  `/fraud-relay-auditor` or prompt *“Use the fraud-relay-auditor skill to benchmark the 3 lanes.”*
+- **Google Antigravity:** Discovered via `.agents/skills/fraud-relay-auditor/SKILL.md`. Trigger naturally:  
   *“Audit the credit card fraud relay pipelines and launch the pit wall.”*
-- **Claude Code:** Discovered via the `.claude/skills/fraud-relay-auditor` symlink. Trigger using:  
-  `/fraud-relay-auditor` or *“Use the fraud-relay-auditor skill to benchmark the 3 lanes.”*
-- **OpenAI Codex CLI:** Discovered automatically from repository skill roots (`.agents/skills/`). Trigger using:  
-  *“Run the fraud-relay-auditor skill and verify zero test-data leakage.”*
 
-All runtimes share the exact same authoritative `SKILL.md` runbook and `scripts/` via a relative symlink.
+All runtimes share the exact same authoritative `SKILL.md` runbook and `scripts/` runtime.
 
 ---
 
@@ -151,8 +170,6 @@ fraud-relay-arena/
 ├── lanes/
 │   └── __init__.py                  # Package namespace
 ├── app.py                           # Streamlit pit-wall dashboard
-├── scrutineer.py                    # Root entry point wrapper
-├── baton_contract.py                # Root contract wrapper
 ├── requirements.txt                 # Pinned dependencies
 ├── .gitignore                       # Git ignore rules
 └── README.md                        # Documentation & write-up
