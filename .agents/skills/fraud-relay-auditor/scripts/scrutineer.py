@@ -50,6 +50,46 @@ COST_FALSE_ALARM  =  10.0   # $ operational + customer friction cost
 
 
 # =====================================================================
+# NAIVE BASELINE: ALWAYS PREDICT LEGITIMATE (PROJECT BRIEF BENCHMARK)
+# =====================================================================
+
+def run_naive_baseline(y_test):
+    """
+    Truly simple 'Always Legitimate' baseline explicitly required by the project brief.
+    Predicts class 0 (legitimate) for 100% of transactions.
+    Demonstrates why 99.8% raw accuracy is a trap:
+    Zero recall, zero precision, and massive bank losses from every single unstopped fraud.
+    """
+    preds = np.zeros_like(y_test, dtype=int)
+    tn, fp, fn, tp = confusion_matrix(y_test, preds, labels=[0, 1]).ravel()
+    prevalence = float(np.mean(y_test))
+    bank_loss = round(fn * COST_MISSED_FRAUD + fp * COST_FALSE_ALARM, 2)
+    return {
+        "lane": "Naive Baseline (Always Legitimate)",
+        "leg1_agent": "None (Majority Class)",
+        "leg2_agent": "Always Predict Legitimate (Class 0)",
+        "leg1_ms": 0.0,
+        "leg2_ms": 0.0,
+        "inference_ms": 0.001,
+        "inference_ms_total": 0.001,
+        "us_per_tx": 0.000,
+        "pr_auc": round(prevalence, 4),
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tn": int(tn),
+        "bank_cost": bank_loss,
+        "bank_cost_usd": bank_loss,
+        "threshold": 0.50,
+        "probs": [0.0] * min(500, len(y_test)),
+        "failures": {"false_negatives": [], "false_positives": []},
+        "relay_score": 0.0,
+    }
+
+
+# =====================================================================
 # CODE 0: OFFICIAL HACKATHON BASELINE
 # =====================================================================
 
@@ -589,10 +629,14 @@ def run_pipeline(
         )
     )
 
-    # ── Code 0: Baseline ───────────────────────────────────────────────
+    # ── Baselines ───────────────────────────────────────────────────────
+    print("\n⚪ Running Naive Baseline (Always Legitimate) …")
+    naive_res = run_naive_baseline(y_test)
+    print(f"   Naive Baseline PR-AUC = {naive_res['pr_auc']:.4f} | Bank Cost = ${naive_res['bank_cost']:,.2f}")
+
     print("\n🔵 Running Code 0: Official Baseline …")
     baseline_res = run_baseline(X_train, y_train, X_test, y_test)
-    print(f"   Baseline PR-AUC = {baseline_res['pr_auc']}")
+    print(f"   Baseline PR-AUC = {baseline_res['pr_auc']:.4f} | Bank Cost = ${baseline_res['bank_cost']:,.2f}")
 
     # ── Lane 1 ──────────────────────────────────────────────────────────
     print("\n🟡 Lane 1: Speed & Velocity Relay …")
@@ -625,6 +669,7 @@ def run_pipeline(
         + audit_baton["bandit_security_issues"]
     )
     base_cost = baseline_res.get("bank_cost", baseline_res.get("bank_cost_usd", 1.0))
+    naive_res["relay_score"] = 0.0
     for r in [baseline_res, r1, r2, r3]:
         r_cost = r.get("bank_cost", r.get("bank_cost_usd", base_cost))
         r_lat = r.get("us_per_tx", 0.0)
@@ -655,6 +700,7 @@ def run_pipeline(
             "fraud_cost": fraud_cost,
             "fp_cost": fp_cost,
         },
+        "naive_baseline": naive_res,
         "baseline": baseline_res,
         "lanes": [r1, r2, r3],
         "security_audit": {
@@ -671,7 +717,7 @@ def run_pipeline(
     header = f"{'Lane':<38} {'PR-AUC':>8} {'Prec':>8} {'Recall':>8} {'Cost($)':>10} {'µs/tx':>8} {'Score':>8}"
     print(header)
     print("-" * 100)
-    for r in [baseline_res, r1, r2, r3]:
+    for r in [naive_res, baseline_res, r1, r2, r3]:
         print(
             f"{r['lane']:<38} "
             f"{r['pr_auc']:>8.4f} "

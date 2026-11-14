@@ -79,7 +79,8 @@ if uploaded_file is not None:
                 st.sidebar.error(f"Benchmark error: {e}")
 
 st.title("🏁 RelayGuard — Trackside Pit Wall")
-all_r = [data["baseline"]] + data["lanes"]
+naive_r = [data["naive_baseline"]] if "naive_baseline" in data else []
+all_r = naive_r + [data["baseline"]] + data["lanes"]
 
 tab1, tab2, tab3, tab4 = st.tabs(["🏆 Leaderboard", "🔍 Fraud Inspector",
                                    "💀 Failure Analysis", "🛡️ Security Audit"])
@@ -142,39 +143,71 @@ with tab1:
 
 # ── TAB 2: LIVE FRAUD INSPECTOR ─────────────────────────────────────
 with tab2:
-    st.subheader("🔍 Live Transaction Fraud Inspector")
-    st.markdown("Adjust sliders to simulate a transaction (Lane 3 explainability).")
+    st.subheader("🔍 Live Transaction Fraud Inspector & Analyst Workflow")
+    st.markdown(
+        "Simulate incoming transactions flowing through RelayGuard's **3-Tier Decision Pipeline** "
+        "and Lane 3's cost-calibrated threshold ($T = 0.35$)."
+    )
+
+    preset = st.selectbox(
+        "⚡ Choose a Real Test Scenario (or select Custom Sliders)",
+        [
+            "Test Row #1882: Escaped Micro-Charge ($2.22 fraud, inverted V17 anomaly)",
+            "Test Row #660: False Alarm Friction ($0.77 legitimate, extreme V14 variance)",
+            "Real Caught Fraud: High-Value Syndicate ($1,480.00)",
+            "Benign Everyday Purchase: Coffee ($4.75)",
+            "Custom Sliders",
+        ],
+    )
+    if preset.startswith("Test Row #1882"):
+        d_amt, d_v14, d_v17, d_v12, d_v10, d_v4 = 2.22, -4.94, 3.70, -0.74, -0.63, 0.45
+    elif preset.startswith("Test Row #660"):
+        d_amt, d_v14, d_v17, d_v12, d_v10, d_v4 = 0.77, -7.54, 5.61, -2.04, -1.82, 3.59
+    elif preset.startswith("Real Caught Fraud"):
+        d_amt, d_v14, d_v17, d_v12, d_v10, d_v4 = 1480.00, -6.80, -4.50, -3.20, -2.90, 4.20
+    elif preset.startswith("Benign Everyday"):
+        d_amt, d_v14, d_v17, d_v12, d_v10, d_v4 = 4.75, 0.20, -0.10, 0.10, 0.05, -0.20
+    else:
+        d_amt, d_v14, d_v17, d_v12, d_v10, d_v4 = 122.50, 0.00, 0.00, 0.00, 0.00, 0.00
+
     ca, cb = st.columns(2)
     with ca:
-        amt = st.slider("💰 Amount ($)", 0.0, 5000.0, 122.5, 0.5)
-        v14 = st.slider("V14 (strongest fraud signal)", -10.0, 10.0, 0.0, 0.1)
-        v17 = st.slider("V17", -10.0, 10.0, 0.0, 0.1)
+        amt = st.slider("💰 Amount ($)", 0.0, 5000.0, float(d_amt), 0.5)
+        v14 = st.slider("V14 (strongest fraud signal)", -10.0, 10.0, float(d_v14), 0.1)
+        v17 = st.slider("V17", -10.0, 10.0, float(d_v17), 0.1)
     with cb:
-        v12 = st.slider("V12", -10.0, 10.0, 0.0, 0.1)
-        v10 = st.slider("V10", -10.0, 10.0, 0.0, 0.1)
-        v4  = st.slider("V4", -10.0, 10.0, 0.0, 0.1)
+        v12 = st.slider("V12", -10.0, 10.0, float(d_v12), 0.1)
+        v10 = st.slider("V10", -10.0, 10.0, float(d_v10), 0.1)
+        v4  = st.slider("V4", -10.0, 10.0, float(d_v4), 0.1)
 
     score = -1.8 * v14 - 1.5 * v17 - 1.2 * v12 + 0.002 * amt
     reasons = []
-    if v14 < -2: reasons.append(f"🔴 **V14 = {v14:.1f}** strongly negative (fraud pattern)")
-    if v17 < -1.5: reasons.append(f"🔴 **V17 = {v17:.1f}** below normal")
-    if v12 < -2: reasons.append(f"🟡 **V12 = {v12:.1f}** unusual")
-    if amt > 1000: reasons.append(f"🟡 **Amount = ${amt:.2f}** high-value")
-    if not reasons: reasons.append("🟢 All features within normal range")
+    if v14 < -2: reasons.append(f"🔴 **V14 = {v14:.1f}** strongly negative (fraud deviation)")
+    if v17 < -1.5: reasons.append(f"🔴 **V17 = {v17:.1f}** anomalous negative deviation")
+    if v17 > 2.5: reasons.append(f"⚠️ **V17 = {v17:.1f}** anomalous positive inversion (card-testing mask)")
+    if v12 < -2: reasons.append(f"🟡 **V12 = {v12:.1f}** unusual transaction deviation")
+    if amt > 1000: reasons.append(f"🟡 **Amount = ${amt:.2f}** high-value transaction risk")
+    if amt < 3.0: reasons.append(f"ℹ️ **Amount = ${amt:.2f}** micro-charge (card-testing velocity pattern)")
+    if not reasons: reasons.append("🟢 All features within normal bounds")
 
     l3 = data["lanes"][2] if len(data["lanes"]) >= 3 else data["baseline"]
-    thr = l3.get("threshold", 0.5)
+    thr = l3.get("threshold", 0.35)
     prob = 1 / (1 + math.exp(-score + 3))
 
     st.divider()
-    if prob >= thr:
-        st.error(f"## 🚨 FRAUD FLAGGED  (Score: {prob:.2%} ≥ Threshold: {thr:.0%})")
+    if prob >= 0.65:
+        st.error(f"## 🛑 TIER 3: HARD BLOCK (Score: {prob:.1%} ≥ 65% Auto-Block Ceiling)")
+        st.caption("Action: Transaction blocked automatically at payment switch. Fraud risk exceeds SLA threshold.")
+    elif prob >= thr:
+        st.warning(f"## ⚠️ TIER 2: ANALYST DESK TRIAGE (Score: {prob:.1%} ≥ {thr:.0%} Cost-Tuned Threshold)")
+        st.caption("Action: Flagged for human review. Plain-English reason codes generated below for desk analyst.")
     else:
-        st.success(f"## ✅ APPROVED  (Score: {prob:.2%} < Threshold: {thr:.0%})")
+        st.success(f"## ✅ TIER 1: AUTO-APPROVED (Score: {prob:.1%} < {thr:.0%} Threshold)")
+        st.caption("Action: Frictionless transaction approved without user disruption.")
 
-    st.markdown("### 📋 Reason Codes")
+    st.markdown("### 📋 Plain-English Reason Codes (Analyst Queue)")
     for r in reasons: st.markdown(f"- {r}")
-    st.caption(f"Cost if missed fraud: **\\$500** · Cost if false block: **\\$10**")
+    st.caption(f"Cost Matrix: Missed fraud = **\\$500** · False alarm card block = **\\$10**")
 
 
 # ── TAB 3: FAILURE ANALYSIS ─────────────────────────────────────────

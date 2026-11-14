@@ -103,24 +103,45 @@ All runtimes share the exact same authoritative `SKILL.md` runbook and `scripts/
 
 ---
 
-## 5. Benchmark Results
+## 5. Benchmark Results & Honest Baselines
 
-Generated on the full 284,807-transaction Kaggle dataset with an 80/20 chronological split (Train: 227,845 transactions, 417 frauds | Test: 56,962 transactions, 75 frauds):
+Generated on the full **284,807-transaction Kaggle dataset** with an untouched **80/20 chronological split** (Train: 227,845 transactions, 417 frauds | Test: 56,962 transactions, 75 frauds):
 
-| Lane | PR-AUC | Precision | Recall | Bank Cost (\$) | Latency (µs/tx) | Composite Score |
+| Pipeline / Lane | PR-AUC | Precision | Recall | Bank Cost (\$) | Latency (µs/tx) | Composite Score |
 |---|---|---|---|---|---|---|
-| **Baseline (Code 0)** | 0.7841 | 0.0708 | 0.8933 | \$12,790.00 | 0.020 | 55.28 |
-| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | \$9,570.00 | 0.521 | 64.65 |
-| **Lane 2: Anomaly + Forest Hybrid** | 0.8079 | 0.9818 | 0.7200 | \$10,510.00 | 0.441 | 62.59 |
-| **Lane 3: Pruned Explainable Cost-Tuner** | 0.7921 | 0.5882 | 0.8000 | \$7,920.00 | 0.386 | 68.97 |
+| **Naive Baseline (Always Legitimate)** | 0.0013 | 0.0000 | 0.0000 | \$37,500.00 | 0.000 | 0.00 |
+| **Baseline (Code 0: Balanced LogisticReg)** | 0.7841 | 0.0708 | 0.8933 | \$12,790.00 | 0.009 | 55.28 |
+| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | \$9,570.00 | 0.449 | 64.65 |
+| **Lane 2: Anomaly + Forest Hybrid** | 0.8079 | 0.9818 | 0.7200 | \$10,510.00 | 0.443 | 62.59 |
+| **Lane 3: Pruned Explainable Cost-Tuner** | 0.7921 | 0.5882 | 0.8000 | \$7,920.00 | 0.554 | 68.97 |
 
 ```
 Composite Score = (45% × PR-AUC) + (35% × Cost Reduction vs Baseline) + (20% × Latency SLA ≤ 5.0 µs/tx)
-Track Security Audit: ✅ scrutineer (16 functions verified) | ✅ baton_contract (3 functions verified)
+Track Security Audit: ✅ scrutineer (18 functions verified) | ✅ baton_contract (3 functions verified)
 ```
-- **Cost Winner:** **Lane 3** cuts total banking losses to **\$7,920.00** (a **38.1% cost reduction** compared to Baseline's \$12,790.00).
-- **Precision Winner:** **Lane 2** reaches **98.2% precision** (only 1 false alarm out of 56,887 legitimate test transactions).
-- **Sub-Microsecond Speed:** All four pipelines achieve inference latency between **0.020 µs and 0.521 µs per transaction**, clearing real-time payment gateway SLAs.
+
+### Why the Baselines Fail & Why the Relay Lanes Win
+1. **The Trap of the Naive Baseline:** The naive "always predict legitimate" baseline hits **99.87% accuracy**, but fails catastrophically in banking reality: **0.0013 PR-AUC, 0% recall, and \$37,500.00 in unstopped fraud losses**.
+2. **The Flaw of Symmetric Logistic Regression (Code 0):** Balanced Logistic Regression achieves high recall (89.33%), but floods the desk with **879 false alarms** (only 7.08% precision). At \$10 per customer block, that generates \$8,790 in customer friction overhead alone, costing \$12,790.00 total.
+3. **How the Relay Lanes Genuinely Outperform:**
+   - **Lane 1 (Velocity & HistGBDT):** Slashes false alarms from 879 to just 7 (88.89% precision) while preserving 0.7964 PR-AUC and cutting bank cost to \$9,570.00.
+   - **Lane 2 (Anomaly Hybrid):** Highest PR-AUC (**0.8079**) and **98.18% precision** (only 1 false alarm out of 56,887 legitimate transactions).
+   - **Lane 3 (Cost-Tuned Winner):** Tunes the decision threshold to $T = 0.35$ for the asymmetric \$500/\$10 loss matrix, achieving the lowest total bank loss of **\$7,920.00** (**38.1% savings vs Code 0, and 78.9% savings vs Naive!**).
+- **Sub-Microsecond Speed:** All four pipelines achieve inference latency between **0.009 µs and 0.554 µs per transaction**, well within payment switch SLAs (< 5.0 µs).
+
+### Core System Novelty (Beyond "Three Models")
+Judges emphasize that running algorithms in isolation is trivial. RelayGuard’s technical novelty lies in:
+1. **Cost-Calibrated Decision Threshold ($T = 0.35$):** Shifting decision boundaries from an arbitrary 0.50 cutoff to mathematically minimize asymmetric \$500 missed-fraud losses against \$10 false alarms.
+2. **3-Tier Human-in-the-Loop Analyst Workflow:**
+   - *Tier 1 (<15% risk):* Auto-approved (frictionless swipe).
+   - *Tier 2 (15%–65% risk):* Routed to the fraud analyst’s review queue with plain-English reason codes.
+   - *Tier 3 (>65% risk):* Automated instant hard block at the payment switch.
+3. **Multivariate Reason Code Explanation Interface:** Decomposing multivariate PCA deviations ($V_{14}, V_{17}, V_{12}$) into plain-English flags (e.g. "anomalous positive V17 inversion + low amount suggests card-testing micro-charge").
+4. **Programmatic Data Leakage Defense:** SHA-256 state handoffs via `RelayBaton` and automated Python `ast` syntax inspection ensuring zero `.fit()` calls on test data.
+
+### Dataset & Synthetic Fallback Transparency
+- **Primary Empirical Benchmark:** Evaluated on the full 284,807 transactions of the real Kaggle Credit Card Fraud Detection dataset using an untouched chronological 80/20 train/test split (227,845 train / 56,962 test).
+- **Synthetic Fallback Disclosure:** `scrutineer.py` contains a built-in deterministic 25,000-row synthetic fallback generator. This fallback is **strictly a defensive resilience mechanism** so that judges or developers cloning the repo without immediate Kaggle credentials can run the pipeline without a crash. The benchmark numbers reported in this paper and dashboard are 100% computed on the real Kaggle dataset.
 
 ---
 
@@ -190,6 +211,16 @@ fraud-relay-arena/
 - **Data & Visualization:** [Plotly Express](https://plotly.com/python/), [pandas](https://pandas.pydata.org/), [NumPy](https://numpy.org/)
 - **Competition Reference:** Veritas AI International High School Hackathon 2026 Project Briefs (Track 4.2.2)
 
+## 10. Limitations & Financial Disclaimer
+
+### Known Technical Limitations
+1. **Isolated Tabular Perspective:** Current models inspect swipes as independent rows without sequential customer history across hours.
+2. **Uniform Cost Matrix:** In real banking, airline chargebacks differ from coffee micro-charges; our uniform \$500 / \$10 matrix models average risk rather than MCC-tiered risk.
+3. **Synthetic Fallback Context:** While our reported benchmark is 100% computed on the full 284,807 Kaggle dataset, offline cold-clones fall back to a 25,000-row synthetic generator until Kaggle data is pulled.
+
+> [!IMPORTANT]
+> **Mandatory Hackathon Disclaimer:** This project is an experimental research prototype developed for the Veritas AI Hackathon Track 4.2.2 and is **not financial advice** or production-ready banking software.
+
 ---
 
-*Team: Rudra Sharma · Built for Veritas AI Track 4.2.2 · "This project is a prototype and is not financial advice."*
+*Built with ❤️ for Veritas AI Track 4.2.2 · "This project is a prototype and is not financial advice."*
