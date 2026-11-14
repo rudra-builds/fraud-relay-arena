@@ -73,37 +73,40 @@ streamlit run app.py
 
 ## 5. Benchmark Results
 
-Generated on the chronological test split (evaluated on unseen future transactions):
+Generated on the full 284,807-transaction Kaggle dataset with an 80/20 chronological split (Train: 227,845 transactions, 417 frauds | Test: 56,962 transactions, 75 frauds):
 
 | Lane | PR-AUC | Precision | Recall | Bank Cost (\$) | Latency (µs/tx) | Relay Score |
 |---|---|---|---|---|---|---|
-| **Baseline (Code 0)** | 1.0000 | 0.9677 | 1.0000 | \$10.00 | 0.024 | 98.93 |
-| **Lane 1: Velocity & HistGBDT** | 0.9582 | 0.9630 | 0.8667 | \$2,010.00 | 1.256 | 3.49 |
-| **Lane 2: Anomaly + Forest Hybrid** | 0.9898 | 1.0000 | 0.8000 | \$3,000.00 | 2.653 | 81.41 |
-| **Lane 3: Pruned Explainable Cost-Tuner** | 0.9757 | 0.9310 | 0.9000 | \$1,520.00 | 0.664 | 64.52 |
+| **Baseline (Code 0)** | 0.7841 | 0.0708 | 0.8933 | \$12,790.00 | 0.019 | 62.84 |
+| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | \$9,570.00 | 0.465 | 30.75 |
+| **Lane 2: Anomaly + Forest Hybrid** | 0.8079 | 0.9818 | 0.7200 | \$10,510.00 | 0.470 | -297.16 |
+| **Lane 3: Pruned Explainable Cost-Tuner** | 0.7921 | 0.5882 | 0.8000 | \$7,920.00 | 0.304 | 51.76 |
 
 ```
 Composite Relay Score = (100 × PR-AUC) – (0.05 × Latency_ms) – (10 × Security Warnings)
 Track Security Audit: ✅ scrutineer (16 functions verified) | ✅ baton_contract (3 functions verified)
 ```
+- **Cost Winner:** **Lane 3** cuts total banking losses to **\$7,920.00** (a **38.1% cost reduction** compared to Baseline's \$12,790.00).
+- **Precision Winner:** **Lane 2** reaches **98.2% precision** (only 1 false alarm out of 56,887 legitimate test transactions).
+- **Sub-Microsecond Speed:** All four pipelines achieve inference latency between **0.019 µs and 0.470 µs per transaction**, clearing real-time payment gateway SLAs.
 
 ---
 
 ## 6. Honest Failure Analysis (Concrete Test Examples)
 
-In accordance with Section 3 of the Veritas AI project guidelines, we highlight real mistakes our models make on unseen test data rather than hiding them behind aggregate metrics:
+In accordance with Section 3 of the Veritas AI project guidelines, we highlight real mistakes our models make on the unseen Kaggle test set:
 
-### Example 1: Missed Fraud / False Negative (Test Row 565)
-- **Ground Truth:** Fraud (`Class = 1`) | **Lane 1 Score:** `0.16%` | **Lane 3 Score:** `8.31%` (Threshold = `0.50`)
-- **Transaction Amount:** \$37.25 (Legit Mean: \$88.73, Fraud Mean: \$234.26)
-- **Feature Readings:** $V_{14} = -4.698$ (fraud-like), $V_{17} = -3.753$ (fraud-like), $V_{12} = -0.551$ (**benign normal**), $V_{10} = -1.015$ (**borderline**).
-- **Why the Model Failed:** This transaction represents a classic "card testing" micro-charge. The attacker deliberately charged a small amount (\$37.25) to verify active card numbers. While $V_{14}$ and $V_{17}$ signaled anomalies, the benign $V_{12}$ and low dollar amount caused gradient-boosted decision trees to route the sample down branches dominated by legitimate consumer transactions. Under our cost matrix, this single failure incurred a **\$500 bank loss**.
+### Example 1: Missed Fraud / False Negative (Test Row 1882)
+- **Ground Truth:** Fraud (`Class = 1`) | **Lane 1 Score:** `29.22%` | **Lane 3 Score:** `9.26%` (Threshold = `0.50`)
+- **Transaction Amount:** **\$2.22** (A micro-charge!)
+- **Feature Readings:** $V_{14} = -4.943$ (fraud-like), $V_{17} = +3.702$ (inverted/positive), $V_{12} = -0.741$ (near-zero), $V_{10} = -0.628$.
+- **Why the Model Failed:** This transaction represents a real-world card-testing micro-charge of just **\$2.22**. The fraudster charged a nominal fee to verify the stolen card's validity. While $V_{14}$ exhibited a classic negative fraud deviation ($-4.943$), $V_{17}$ was anomalous in the positive direction ($+3.702$), and $V_{12}$ remained near zero. The tree-based ensembles routed this conjunction down majority-legitimate branches because of the tiny amount and mixed principal components. Under our cost matrix, this escaped fraud cost the bank **\$500.00**.
 
-### Example 2: False Alarm / False Positive (Test Row 1864)
-- **Ground Truth:** Legitimate (`Class = 0`) | **Lane 1 Score:** `99.67%` | **Lane 3 Score:** `93.36%`
-- **Transaction Amount:** \$111.19
-- **Feature Readings:** $V_{14} = -2.707$, $V_{12} = -2.641$.
-- **Why the Model Failed:** Random Gaussian tail variance caused two key PCA components to dip simultaneously into negative territory, mimicking the fraud cluster centroid despite legitimate cardholder activity. This triggered an unnecessary card freeze incurring a **\$10 customer friction penalty**.
+### Example 2: False Alarm / False Positive (Test Row 660)
+- **Ground Truth:** Legitimate (`Class = 0`) | **Lane 1 Score:** `74.78%` | **Lane 3 Score:** `85.36%`
+- **Transaction Amount:** **\$0.77**
+- **Feature Readings:** $V_{14} = -7.537$, $V_{17} = +5.609$, $V_{12} = -2.037$, $V_4 = +3.586$.
+- **Why the Model Failed:** This legitimate cardholder had a transaction with extreme PCA variance: $V_{14}$ dropped to $-7.537$ and $V_{12}$ dropped to $-2.037$, heavily overlapping with the multivariate fraud centroid. Both Lane 1 and Lane 3 triggered false alerts, costing **\$10.00** in cardholder friction and SMS verification overhead.
 
 ---
 
