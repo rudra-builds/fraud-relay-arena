@@ -484,11 +484,37 @@ def audit_code_security_and_ast(file_path: str) -> dict:
     }
 
 
-def compute_relay_score(pr_auc: float, total_ms: float, sec_warnings: int) -> float:
+def compute_relay_score(
+    pr_auc: float,
+    lane_cost: float,
+    baseline_cost: float,
+    us_per_tx: float,
+    sec_warnings: int = 0,
+) -> float:
     """
-    Composite Relay Score = (100 × PR-AUC) – (0.05 × Latency_ms) – (10 × Security Warnings)
+    Composite Score (0–100):
+      • 45% PR-AUC: 45.0 × pr_auc
+      • 35% Bank Cost Reduction vs Baseline: 35.0 × max(0.0, (baseline_cost - lane_cost) / baseline_cost)
+      • 20% Latency SLA compliance: 20.0 pts if us_per_tx <= 5.0 µs/tx (scaled if > 5.0 µs)
+      • Deductions: -10 pts per security warning
     """
-    return round(100 * pr_auc - 0.05 * total_ms - 10 * sec_warnings, 2)
+    auc_pts = 45.0 * max(0.0, min(1.0, float(pr_auc)))
+
+    if baseline_cost > 0:
+        cost_reduction = (baseline_cost - lane_cost) / baseline_cost
+        cost_pts = 35.0 * max(0.0, min(1.0, cost_reduction))
+    else:
+        cost_pts = 0.0
+
+    # Under 5.0 µs/tx receives full speed points
+    if us_per_tx <= 5.0:
+        latency_pts = 20.0
+    else:
+        latency_pts = 20.0 * max(0.0, 1.0 - (us_per_tx - 5.0) / 20.0)
+
+    penalty = 10.0 * sec_warnings
+    score = auc_pts + cost_pts + latency_pts - penalty
+    return round(float(score), 2)
 
 
 # =====================================================================
@@ -560,9 +586,17 @@ def main():
         audit_scrutineer["bandit_security_issues"]
         + audit_baton["bandit_security_issues"]
     )
+    base_cost = baseline_res.get("bank_cost", baseline_res.get("bank_cost_usd", 1.0))
     for r in [baseline_res, r1, r2, r3]:
-        total_ms = r["leg1_ms"] + r["leg2_ms"] + r["inference_ms_total"]
-        r["relay_score"] = compute_relay_score(r["pr_auc"], total_ms, total_warnings)
+        r_cost = r.get("bank_cost", r.get("bank_cost_usd", base_cost))
+        r_lat = r.get("us_per_tx", 0.0)
+        r["relay_score"] = compute_relay_score(
+            pr_auc=r["pr_auc"],
+            lane_cost=r_cost,
+            baseline_cost=base_cost,
+            us_per_tx=r_lat,
+            sec_warnings=total_warnings,
+        )
 
     # ── Assemble & save telemetry ───────────────────────────────────────
     output = {

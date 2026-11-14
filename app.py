@@ -64,7 +64,7 @@ with tab1:
                                 color="#2e7d32", props="color:white;font-weight:bold")
                  .highlight_min(subset=["Bank Cost ($)","µs/tx"],
                                 color="#1565c0", props="color:white;font-weight:bold"),
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -72,13 +72,13 @@ with tab1:
                      title="PR-AUC (↑ better)")
         fig.update_traces(textposition="outside", texttemplate="%{text:.4f}")
         fig.update_layout(showlegend=False, yaxis_range=[0, 1])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with c2:
         fig = px.bar(df, x="Lane", y="Bank Cost ($)", color="Lane", text="Bank Cost ($)",
                      title="Bank Cost (↓ better)")
         fig.update_traces(textposition="outside", texttemplate="$%{text:,.0f}")
         fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.subheader("⏱️ Split Times (ms)")
     trows = []
@@ -88,7 +88,7 @@ with tab1:
         trows.append({"Lane": r["lane"], "Phase": "Inference", "ms": r.get("inference_ms", r.get("inference_ms_total", 0.0))})
     st.plotly_chart(px.bar(pd.DataFrame(trows), x="Lane", y="ms", color="Phase",
                            barmode="stack", title="Relay Leg Timings"),
-                    use_container_width=True)
+                    width="stretch")
 
     st.subheader("🔢 Confusion Matrices")
     cols = st.columns(len(all_r))
@@ -99,7 +99,7 @@ with tab1:
                             text_auto=True, color_continuous_scale="Blues",
                             title=r["lane"][:22])
             fig.update_layout(height=280, margin=dict(l=5,r=5,t=35,b=5))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
 
 # ── TAB 2: LIVE FRAUD INSPECTOR ─────────────────────────────────────
@@ -153,7 +153,7 @@ with tab3:
         if fn_l:
             st.dataframe(pd.DataFrame(fn_l).rename(
                 columns={"row":"Row","prob":"Probability","amount":"Amount ($)"}),
-                use_container_width=True, hide_index=True)
+                width="stretch", hide_index=True)
             st.metric("💸 Cost (sample)", f"${len(fn_l)*500:,}",
                       delta=f"-{len(fn_l)} escaped", delta_color="inverse")
         else:
@@ -164,7 +164,7 @@ with tab3:
         if fp_l:
             st.dataframe(pd.DataFrame(fp_l).rename(
                 columns={"row":"Row","prob":"Probability","amount":"Amount ($)"}),
-                use_container_width=True, hide_index=True)
+                width="stretch", hide_index=True)
             st.metric("😤 Friction (sample)", f"${len(fp_l)*10:,}",
                       delta=f"+{len(fp_l)} blocked", delta_color="inverse")
         else:
@@ -178,7 +178,7 @@ with tab3:
                       labels={"threshold":"Threshold","cost_usd":"Cost ($)"})
         fig.add_vline(x=sr["threshold"], line_dash="dash", line_color="red",
                       annotation_text=f"Optimal T={sr['threshold']:.2f}")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 # ── TAB 4: SECURITY AUDIT ───────────────────────────────────────────
@@ -198,9 +198,9 @@ with tab4:
             if b_detail: st.info("Bandit: " + " · ".join(b_detail))
 
     st.divider()
-    st.markdown(r"**Relay Score** $= 100 \times \text{PR-AUC}"
-                r" - 0.05 \times \text{Latency}_\text{ms}"
-                r" - 10 \times \text{Security Warnings}$")
+    st.markdown(r"**Composite Score** $= 45\% \times \text{PR-AUC}"
+                r" + 35\% \times \text{Cost Reduction vs Baseline}"
+                r" + 20\% \times \text{Latency SLA } (\le 5.0\,\mu\text{s/tx})$")
     sc_rows = [{"Lane": r["lane"], "Relay Score": r["relay_score"]}
                for r in all_r if "relay_score" in r]
     if sc_rows:
@@ -208,7 +208,7 @@ with tab4:
                      color="Lane", text="Relay Score", title="Composite Relay Scores")
         fig.update_traces(textposition="outside")
         fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 st.sidebar.divider()
 st.sidebar.caption("Team: Rudra Sharma · Veritas AI 2026 · Track 4.2.2")

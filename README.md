@@ -75,15 +75,15 @@ streamlit run app.py
 
 Generated on the full 284,807-transaction Kaggle dataset with an 80/20 chronological split (Train: 227,845 transactions, 417 frauds | Test: 56,962 transactions, 75 frauds):
 
-| Lane | PR-AUC | Precision | Recall | Bank Cost (\$) | Latency (µs/tx) | Relay Score |
+| Lane | PR-AUC | Precision | Recall | Bank Cost (\$) | Latency (µs/tx) | Composite Score |
 |---|---|---|---|---|---|---|
-| **Baseline (Code 0)** | 0.7841 | 0.0708 | 0.8933 | \$12,790.00 | 0.019 | 62.84 |
-| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | \$9,570.00 | 0.465 | 30.75 |
-| **Lane 2: Anomaly + Forest Hybrid** | 0.8079 | 0.9818 | 0.7200 | \$10,510.00 | 0.470 | -297.16 |
-| **Lane 3: Pruned Explainable Cost-Tuner** | 0.7921 | 0.5882 | 0.8000 | \$7,920.00 | 0.304 | 51.76 |
+| **Baseline (Code 0)** | 0.7841 | 0.0708 | 0.8933 | \$12,790.00 | 0.020 | 55.28 |
+| **Lane 1: Velocity & HistGBDT** | 0.7964 | 0.8889 | 0.7467 | \$9,570.00 | 0.521 | 64.65 |
+| **Lane 2: Anomaly + Forest Hybrid** | 0.8079 | 0.9818 | 0.7200 | \$10,510.00 | 0.441 | 62.59 |
+| **Lane 3: Pruned Explainable Cost-Tuner** | 0.7921 | 0.5882 | 0.8000 | \$7,920.00 | 0.386 | 68.97 |
 
 ```
-Composite Relay Score = (100 × PR-AUC) – (0.05 × Latency_ms) – (10 × Security Warnings)
+Composite Score = (45% × PR-AUC) + (35% × Cost Reduction vs Baseline) + (20% × Latency SLA ≤ 5.0 µs/tx)
 Track Security Audit: ✅ scrutineer (16 functions verified) | ✅ baton_contract (3 functions verified)
 ```
 - **Cost Winner:** **Lane 3** cuts total banking losses to **\$7,920.00** (a **38.1% cost reduction** compared to Baseline's \$12,790.00).
