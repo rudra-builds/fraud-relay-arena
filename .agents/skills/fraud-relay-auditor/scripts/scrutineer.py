@@ -93,7 +93,7 @@ def run_naive_baseline(y_test):
 # CODE 0: OFFICIAL HACKATHON BASELINE
 # =====================================================================
 
-def run_baseline(X_train, y_train, X_test, y_test):
+def run_baseline(X_train, y_train, X_test, y_test, raw_amounts: Optional[np.ndarray] = None):
     """RobustScaler → LogisticRegression(class_weight='balanced')."""
 
     t0 = time.perf_counter_ns()
@@ -114,8 +114,8 @@ def run_baseline(X_train, y_train, X_test, y_test):
     preds = (probs >= 0.5).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_test, preds, labels=[0, 1]).ravel()
 
-    # Collect failure cases for the dashboard
-    failures = _collect_failure_cases(y_test, preds, probs, X_test)
+    # Collect failure cases with true transaction dollar amounts
+    failures = _collect_failure_cases(y_test, preds, probs, amounts=raw_amounts)
 
     return {
         "lane": "Baseline (Code 0)",
@@ -145,7 +145,7 @@ def run_baseline(X_train, y_train, X_test, y_test):
 # LANE 1: SPEED & TEMPORAL VELOCITY RELAY  (Agents 1A + 1B)
 # =====================================================================
 
-def agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feature_names) -> RelayBaton:
+def agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feature_names, raw_amounts: Optional[np.ndarray] = None) -> RelayBaton:
     """Leg 1 – Cyclical Time encoding + log-Amount feature engineering."""
 
     t0 = time.perf_counter_ns()
@@ -187,6 +187,7 @@ def agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feature_names) 
         feature_names=aug_names,
         leg1_time_ms=leg1_ms,
         train_fit_hash=hashlib.sha256(X_tr[:100].tobytes()).hexdigest()[:12],
+        metadata={"raw_amounts": raw_amounts},
     )
     baton.verify_handoff()
     return baton
@@ -216,7 +217,7 @@ def agent_1b_fast_gbdt(baton: RelayBaton) -> dict:
 # LANE 2: UNSUPERVISED ANOMALY + ENSEMBLE RELAY  (Agents 2A + 2B)
 # =====================================================================
 
-def agent_2a_anomaly_scorer(X_train, y_train, X_test, y_test, feature_names) -> RelayBaton:
+def agent_2a_anomaly_scorer(X_train, y_train, X_test, y_test, feature_names, raw_amounts: Optional[np.ndarray] = None) -> RelayBaton:
     """Leg 1 – IsolationForest anomaly scores as a synthetic feature."""
 
     t0 = time.perf_counter_ns()
@@ -250,6 +251,7 @@ def agent_2a_anomaly_scorer(X_train, y_train, X_test, y_test, feature_names) -> 
         feature_names=feature_names + ["IsoForest_Anomaly_Score"],
         leg1_time_ms=leg1_ms,
         train_fit_hash=hashlib.sha256(X_tr_aug[:100].tobytes()).hexdigest()[:12],
+        metadata={"raw_amounts": raw_amounts},
     )
     baton.verify_handoff()
     return baton
@@ -280,7 +282,7 @@ def agent_2b_calibrated_forest(baton: RelayBaton) -> dict:
 # LANE 3: SIGNAL PRUNING + BANK-COST THRESHOLD RELAY  (Agents 3A + 3B)
 # =====================================================================
 
-def agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feature_names) -> RelayBaton:
+def agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feature_names, raw_amounts: Optional[np.ndarray] = None) -> RelayBaton:
     """Leg 1 – Select top 12 features by training-set point-biserial correlation."""
 
     t0 = time.perf_counter_ns()
@@ -310,7 +312,7 @@ def agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feature_names) -> R
         feature_names=pruned_names,
         leg1_time_ms=leg1_ms,
         train_fit_hash=hashlib.sha256(X_tr[:100].tobytes()).hexdigest()[:12],
-        metadata={"selected_features": pruned_names},
+        metadata={"selected_features": pruned_names, "raw_amounts": raw_amounts},
     )
     baton.verify_handoff()
     return baton
@@ -375,21 +377,26 @@ def _collect_failure_cases(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     probs: np.ndarray,
-    X: np.ndarray,
+    amounts: Optional[np.ndarray] = None,
     max_cases: int = 20,
 ) -> dict:
-    """Collect sample false-negatives and false-positives for the dashboard."""
+    """Collect sample false-negatives and false-positives with exact transaction dollar amounts."""
 
     fn_idx = np.where((y_true == 1) & (y_pred == 0))[0][:max_cases]
     fp_idx = np.where((y_true == 0) & (y_pred == 1))[0][:max_cases]
 
+    def _get_amt(i: int) -> float:
+        if amounts is not None and i < len(amounts):
+            return round(float(amounts[i]), 2)
+        return 0.0
+
     return {
         "false_negatives": [
-            {"row": int(i), "prob": round(float(probs[i]), 4), "amount": round(float(X[i, -1]), 2) if X.shape[1] > 1 else 0}
+            {"row": int(i), "prob": round(float(probs[i]), 4), "amount": _get_amt(i)}
             for i in fn_idx
         ],
         "false_positives": [
-            {"row": int(i), "prob": round(float(probs[i]), 4), "amount": round(float(X[i, -1]), 2) if X.shape[1] > 1 else 0}
+            {"row": int(i), "prob": round(float(probs[i]), 4), "amount": _get_amt(i)}
             for i in fp_idx
         ],
     }
@@ -407,7 +414,8 @@ def _score_lane(
 
     preds = (probs >= threshold).astype(int)
     tn, fp, fn, tp = confusion_matrix(baton.y_test, preds, labels=[0, 1]).ravel()
-    failures = _collect_failure_cases(baton.y_test, preds, probs, baton.X_test)
+    raw_amts = baton.metadata.get("raw_amounts", None)
+    failures = _collect_failure_cases(baton.y_test, preds, probs, amounts=raw_amts)
 
     return {
         "lane": baton.lane_id,
@@ -491,7 +499,7 @@ def audit_code_security_and_ast(file_path: str) -> dict:
     bandit_detail: List[str] = []
     try:
         res = subprocess.run(  # nosec B603 B607 – auditor tool, not user input
-            ["bandit", "-f", "json", "-q", file_path],
+            [sys.executable, "-m", "bandit", "-f", "json", "-q", file_path],
             capture_output=True,
             text=True,
             timeout=30,
@@ -510,6 +518,8 @@ def audit_code_security_and_ast(file_path: str) -> dict:
                 f"Line {r.get('line_number')}: {r.get('issue_text', '')}"
                 for r in results[:5]
             ]
+            if bandit_issues == 0:
+                bandit_detail = ["Bandit SAST scan passed: 0 medium/high security flaws"]
     except FileNotFoundError:
         bandit_detail = ["bandit not installed – skipping security scan"]
     except Exception as exc:
@@ -629,30 +639,37 @@ def run_pipeline(
         )
     )
 
+    # Extract unscaled transaction dollar amounts for dashboard failure inspection
+    raw_amounts = (
+        raw_test_df["Amount"].values
+        if raw_test_df is not None and "Amount" in raw_test_df.columns
+        else None
+    )
+
     # ── Baselines ───────────────────────────────────────────────────────
     print("\n⚪ Running Naive Baseline (Always Legitimate) …")
     naive_res = run_naive_baseline(y_test)
     print(f"   Naive Baseline PR-AUC = {naive_res['pr_auc']:.4f} | Bank Cost = ${naive_res['bank_cost']:,.2f}")
 
     print("\n🔵 Running Code 0: Official Baseline …")
-    baseline_res = run_baseline(X_train, y_train, X_test, y_test)
+    baseline_res = run_baseline(X_train, y_train, X_test, y_test, raw_amounts=raw_amounts)
     print(f"   Baseline PR-AUC = {baseline_res['pr_auc']:.4f} | Bank Cost = ${baseline_res['bank_cost']:,.2f}")
 
     # ── Lane 1 ──────────────────────────────────────────────────────────
     print("\n🟡 Lane 1: Speed & Velocity Relay …")
-    b1 = agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feat_names)
+    b1 = agent_1a_temporal_engineer(X_train, y_train, X_test, y_test, feat_names, raw_amounts=raw_amounts)
     r1 = agent_1b_fast_gbdt(b1)
     print(f"   Lane 1 PR-AUC = {r1['pr_auc']}")
 
     # ── Lane 2 ──────────────────────────────────────────────────────────
     print("\n🟢 Lane 2: Anomaly Hybrid Relay …")
-    b2 = agent_2a_anomaly_scorer(X_train, y_train, X_test, y_test, feat_names)
+    b2 = agent_2a_anomaly_scorer(X_train, y_train, X_test, y_test, feat_names, raw_amounts=raw_amounts)
     r2 = agent_2b_calibrated_forest(b2)
     print(f"   Lane 2 PR-AUC = {r2['pr_auc']}")
 
     # ── Lane 3 ──────────────────────────────────────────────────────────
     print("\n🔴 Lane 3: Explainable Cost-Tuner Relay …")
-    b3 = agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feat_names)
+    b3 = agent_3a_signal_pruner(X_train, y_train, X_test, y_test, feat_names, raw_amounts=raw_amounts)
     r3 = agent_3b_cost_optimizer(b3)
     print(f"   Lane 3 PR-AUC = {r3['pr_auc']}")
 

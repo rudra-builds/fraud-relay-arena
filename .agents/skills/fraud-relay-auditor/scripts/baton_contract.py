@@ -171,31 +171,41 @@ def load_chronological_split(
 
 def _generate_synthetic_fallback(n_rows: int = 25_000, seed: int = 42) -> pd.DataFrame:
     """
-    Produce a reproducible synthetic dataset that mirrors the real Kaggle
-    schema (V1–V28 PCA features, Time, Amount, Class) with a realistic
-    ~0.5 % fraud rate driven by V14, V17, V12, and Amount correlations.
-
-    The signal is strong enough for tree-based models to learn patterns
-    while remaining challenging for linear models.
+    Produce a realistic synthetic dataset that mirrors the real Kaggle schema
+    (Time, V1–V28, Amount, Class) with non-trivial class overlap so linear models
+    do not produce unrealistic perfect scores (PR-AUC 1.0).
     """
     rng = np.random.default_rng(seed)
 
-    n_legit = int(n_rows * 0.995)
+    n_legit = int(n_rows * 0.998)
     n_fraud = n_rows - n_legit
 
-    # --- Legitimate transactions (normal cluster) ---
+    # --- Legitimate transactions with realistic feature noise ---
     legit = rng.normal(0.0, 1.0, size=(n_legit, 28))
+    # 2.5% benign outliers with extreme variance (causes realistic false alarms)
+    outliers = rng.choice(n_legit, size=int(0.025 * n_legit), replace=False)
+    legit[outliers, 13] -= rng.uniform(2.0, 5.0, size=len(outliers))  # V14 drop on legit
     legit_amt = rng.exponential(scale=88.0, size=n_legit)
 
-    # --- Fraudulent transactions (shifted cluster on key features) ---
+    # --- Fraud transactions with mixed distributions ---
     fraud = rng.normal(0.0, 1.0, size=(n_fraud, 28))
-    # V14, V17, V12 are strongly negative for fraud (mirrors real data)
-    fraud[:, 13] -= rng.uniform(3.0, 7.0, size=n_fraud)   # V14
-    fraud[:, 16] -= rng.uniform(2.0, 5.0, size=n_fraud)   # V17
-    fraud[:, 11] -= rng.uniform(2.0, 6.0, size=n_fraud)   # V12
-    fraud[:, 9]  -= rng.uniform(1.0, 4.0, size=n_fraud)   # V10
-    fraud[:, 3]  += rng.uniform(1.0, 3.0, size=n_fraud)   # V4
-    fraud_amt = rng.exponential(scale=250.0, size=n_fraud)
+    c1 = int(n_fraud * 0.5)   # 50% syndicate fraud (classic V14/V17/V12 drop)
+    fraud[:c1, 13] -= rng.uniform(2.5, 5.5, size=c1)   # V14
+    fraud[:c1, 16] -= rng.uniform(2.0, 4.5, size=c1)   # V17
+    fraud[:c1, 11] -= rng.uniform(1.5, 4.0, size=c1)   # V12
+
+    c2 = int(n_fraud * 0.3)   # 30% card-testing micro-charges (inverted V17)
+    fraud[c1:c1+c2, 13] -= rng.uniform(1.5, 3.5, size=c2)  # V14
+    fraud[c1:c1+c2, 16] += rng.uniform(1.5, 3.5, size=c2)  # V17 inverted!
+
+    c3 = n_fraud - (c1 + c2)  # 20% high-velocity anomaly
+    fraud[c1+c2:, 3] += rng.uniform(2.0, 4.5, size=c3)     # V4
+
+    fraud_amt = np.concatenate([
+        rng.exponential(scale=220.0, size=c1),
+        rng.uniform(1.0, 5.0, size=c2),                     # micro-charges ($1-$5)
+        rng.exponential(scale=750.0, size=c3),
+    ])
 
     data = np.vstack([legit, fraud])
     amounts = np.concatenate([legit_amt, fraud_amt])
@@ -203,12 +213,11 @@ def _generate_synthetic_fallback(n_rows: int = 25_000, seed: int = 42) -> pd.Dat
 
     df = pd.DataFrame(data, columns=[f"V{i}" for i in range(1, 29)])
     df["Amount"] = amounts
+    df["Class"] = labels.astype(int)
 
-    # Time: sorted seconds across ~2 days; shuffle first so fraud is spread
+    # Shuffle rows so fraud is chronologically spread
     shuffle_idx = rng.permutation(n_rows)
     df = df.iloc[shuffle_idx].reset_index(drop=True)
-    labels = labels[shuffle_idx]
-    df["Time"] = np.sort(rng.uniform(0, 172_800, size=n_rows))
-    df["Class"] = labels.astype(int)
+    df.insert(0, "Time", np.sort(rng.uniform(0, 172_800, size=n_rows)))
 
     return df
